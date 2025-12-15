@@ -27,18 +27,19 @@ public class LexemeGenerator {
         
         readLines();
         fillSymbolTable();
+        fillSymbolTableForm();  // Llenar la tabla de símbolos visual
         System.out.println(this.getLines());
         fillTokenTable();
     }
     
     private void readLines() {
-        while (reader.hasNextLine()) {
-            String str = reader.nextLine();
-            if (!(str.length() == 0)) {     
+        String[] lineArray = sourceStream.split("\n");
+        for (String str : lineArray) {
+            if (!str.trim().isEmpty()) {     
                 String [] strSplit = str.trim().split("\\s+|\\s*,\\s*|\\;+|\\.+|\\:+|\\[+|\\]+");     
                 List <String> list = Arrays.asList(strSplit);       
                 this.lines.addAll(list);                                 
-            } else numOfBlankLines++;
+            }
             this.lines.add("linebreak");
         }
     }
@@ -109,6 +110,18 @@ public class LexemeGenerator {
         return literal;
     }
     
+    private void fillSymbolTableForm() {
+        for (Map.Entry<String, List<String>> entry : this.symbolTable.entrySet()) {
+            String category = entry.getKey();
+            if (!category.equals("Identifiers")) {  // Evitar duplicados, ya insertados en fillTokenTable
+                for (String item : entry.getValue()) {
+                    this.symbolTableForm.model.insertRow(this.symbolTableForm.model.getRowCount(),
+                        new Object[]{"", category, item, ""});
+                }
+            }
+        }
+    }
+
     private void fillTokenTable() {
         int lineNumber = 1;
         

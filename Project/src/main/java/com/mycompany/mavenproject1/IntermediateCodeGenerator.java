@@ -69,6 +69,8 @@ public class IntermediateCodeGenerator extends javax.swing.JFrame
         String finalCode = "";
         String[] lines = text.split("\n");
         for (String line : lines){
+            line = line.trim().replaceAll(";$", ""); // Remove trailing semicolon
+            if (isIgnoredLine(line)) continue; // Ignorar líneas no soportadas
             if (isExpressionLine(line)){
                 String UpdatedLine = ThreeAddressCode.GenerateCode(line);
                 finalCode += UpdatedLine + "\n";
@@ -98,6 +100,11 @@ public class IntermediateCodeGenerator extends javax.swing.JFrame
         else {
             return false;
         }
+    }
+    
+    private static boolean isIgnoredLine(String line) {
+        return line.contains("import") || line.contains("class") || line.contains("main") || 
+               line.contains("Scanner") || line.contains("System.out");
     }
     public static String performFormat(String text){
         String lines[] = text.split("\n");
