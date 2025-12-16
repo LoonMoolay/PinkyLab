@@ -50,6 +50,8 @@ public class MainPanel extends javax.swing.JFrame {
     ObjectCodeGenerator objectCodeFrame;
     private JTextArea terminalOutput;
     private JButton runButton;
+    private Process currentRunningProcess;
+    private java.io.BufferedWriter processInputWriter;
     
     // Colores PinkyLab
     private static final Color COLOR_FONDO_PRINCIPAL = new Color(255, 255, 255);//Blanco puro
@@ -182,12 +184,39 @@ public class MainPanel extends javax.swing.JFrame {
 
         // Terminal output panel
         terminalOutput = new JTextArea();
-        terminalOutput.setEditable(false);
+        terminalOutput.setEditable(true);  // Enable editing for Scanner input
         terminalOutput.setFont(new Font("Consolas", Font.PLAIN, 13));
         terminalOutput.setBackground(new Color(30, 30, 30));
         terminalOutput.setForeground(new Color(0, 255, 0));
         terminalOutput.setCaretColor(Color.WHITE);
         terminalOutput.setText("Terminal output will appear here...\n");
+
+        // Add Enter key listener to send input to Scanner
+        terminalOutput.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyPressed(java.awt.event.KeyEvent evt) {
+                if (evt.getKeyCode() == java.awt.event.KeyEvent.VK_ENTER && processInputWriter != null) {
+                    evt.consume(); // Prevent default newline behavior
+                    try {
+                        // Extract the last line typed by user
+                        String text = terminalOutput.getText();
+                        int lastNewline = text.lastIndexOf('\n', text.length() - 2);
+                        String input = text.substring(lastNewline + 1).trim();
+
+                        // Send input to the running process
+                        processInputWriter.write(input);
+                        processInputWriter.newLine();
+                        processInputWriter.flush();
+
+                        // Add newline to terminal display
+                        terminalOutput.append("\n");
+                        terminalOutput.setCaretPosition(terminalOutput.getDocument().getLength());
+                    } catch (java.io.IOException e) {
+                        terminalOutput.append("\nError sending input: " + e.getMessage() + "\n");
+                    }
+                }
+            }
+        });
 
         JScrollPane terminalScrollPane = new JScrollPane(terminalOutput);
         terminalScrollPane.setBorder(BorderFactory.createTitledBorder(
@@ -394,6 +423,7 @@ public class MainPanel extends javax.swing.JFrame {
 
         terminalOutput.setText("Compiling and running...\n");
         runButton.setEnabled(false);
+        terminalOutput.setEditable(false);
 
         SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
             @Override
@@ -418,9 +448,13 @@ public class MainPanel extends javax.swing.JFrame {
 
                     publish("Compiling " + className + ".java...\n");
 
-                    // Compile
+                    // Compile with increased memory and stack size for complex code (e.g., matrices)
                     ProcessBuilder compileBuilder = new ProcessBuilder(
-                        "javac", javaFile.getAbsolutePath()
+                        "javac",
+                        "-J-Xmx2048m",      // Increase heap memory to 2GB
+                        "-J-Xss10m",        // Increase stack size to 10MB for deep recursion
+                        "-encoding", "UTF-8", // Ensure UTF-8 encoding
+                        javaFile.getAbsolutePath()
                     );
                     compileBuilder.directory(tempDir);
                     compileBuilder.redirectErrorStream(true);
@@ -435,7 +469,17 @@ public class MainPanel extends javax.swing.JFrame {
                         }
                     }
 
-                    int compileExitCode = compileProcess.waitFor();
+                    // Wait for compilation with timeout (2 minutes for complex code)
+                    boolean compiledInTime = compileProcess.waitFor(120, java.util.concurrent.TimeUnit.SECONDS);
+
+                    if (!compiledInTime) {
+                        compileProcess.destroyForcibly();
+                        publish("Compilation timeout: Code is too complex or has infinite loop in compilation.\n");
+                        publish("Try simplifying the code or breaking it into smaller parts.\n");
+                        return null;
+                    }
+
+                    int compileExitCode = compileProcess.exitValue();
                     if (compileExitCode != 0) {
                         publish("Compilation failed:\n" + compileOutput.toString());
                         return null;
@@ -444,24 +488,60 @@ public class MainPanel extends javax.swing.JFrame {
                     publish("Compilation successful!\n");
                     publish("Running " + className + "...\n");
                     publish("----------------------------------------\n");
+                    publish("[Program started - Type input and press Enter when prompted]\n");
 
-                    // Run
+                    // Run with increased memory for matrix operations
                     ProcessBuilder runBuilder = new ProcessBuilder(
-                        "java", className
+                        "java",
+                        "-Xmx2048m",        // Max heap memory 2GB
+                        "-Xss10m",          // Stack size 10MB
+                        className
                     );
                     runBuilder.directory(tempDir);
                     runBuilder.redirectErrorStream(true);
-                    Process runProcess = runBuilder.start();
+                    currentRunningProcess = runBuilder.start();
 
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(runProcess.getInputStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            publish(line + "\n");
+                    // Setup input writer for Scanner support
+                    processInputWriter = new java.io.BufferedWriter(
+                        new java.io.OutputStreamWriter(currentRunningProcess.getOutputStream()));
+
+                    // Enable terminal for user input
+                    javax.swing.SwingUtilities.invokeLater(() -> {
+                        terminalOutput.setEditable(true);
+                        terminalOutput.requestFocus();
+                    });
+
+                    // Read process output in separate thread
+                    Thread outputThread = new Thread(() -> {
+                        try (BufferedReader reader = new BufferedReader(
+                                new InputStreamReader(currentRunningProcess.getInputStream()))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                final String outputLine = line;
+                                publish(outputLine + "\n");
+                            }
+                        } catch (IOException e) {
+                            if (!e.getMessage().contains("Stream closed")) {
+                                publish("Error reading output: " + e.getMessage() + "\n");
+                            }
                         }
+                    });
+                    outputThread.start();
+
+                    // Wait for process with timeout (5 minutes)
+                    boolean finishedInTime = currentRunningProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS);
+
+                    // Wait for output thread to complete
+                    outputThread.join(1000);
+
+                    if (!finishedInTime) {
+                        currentRunningProcess.destroyForcibly();
+                        publish("----------------------------------------\n");
+                        publish("Execution timeout: Program took too long (possible infinite loop).\n");
+                        return null;
                     }
 
-                    int runExitCode = runProcess.waitFor();
+                    int runExitCode = currentRunningProcess.exitValue();
                     publish("----------------------------------------\n");
                     publish("Program exited with code: " + runExitCode + "\n");
 
@@ -472,6 +552,17 @@ public class MainPanel extends javax.swing.JFrame {
                 } catch (Exception e) {
                     publish("Error: " + e.getMessage() + "\n");
                     e.printStackTrace();
+                } finally {
+                    // Cleanup process resources
+                    if (processInputWriter != null) {
+                        try {
+                            processInputWriter.close();
+                        } catch (IOException e) {
+                            // Ignore
+                        }
+                        processInputWriter = null;
+                    }
+                    currentRunningProcess = null;
                 }
                 return null;
             }
@@ -487,6 +578,9 @@ public class MainPanel extends javax.swing.JFrame {
             @Override
             protected void done() {
                 runButton.setEnabled(true);
+                terminalOutput.setEditable(false);
+                processInputWriter = null;
+                currentRunningProcess = null;
             }
         };
 
