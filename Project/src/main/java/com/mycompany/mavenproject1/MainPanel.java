@@ -8,12 +8,16 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -28,9 +32,13 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JSplitPane;
 import javax.swing.border.EmptyBorder;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.SwingWorker;
 
 public class MainPanel extends javax.swing.JFrame {
 
@@ -40,6 +48,8 @@ public class MainPanel extends javax.swing.JFrame {
     SymbolTable symbolTable;
     IntermediateCodeGenerator intermediateFrame;
     ObjectCodeGenerator objectCodeFrame;
+    private JTextArea terminalOutput;
+    private JButton runButton;
     
     // Colores PinkyLab
     private static final Color COLOR_FONDO_PRINCIPAL = new Color(255, 255, 255);//Blanco puro
@@ -74,7 +84,7 @@ public class MainPanel extends javax.swing.JFrame {
         headerPanel.setBackground(COLOR_FONDO_PRINCIPAL);
         
         try {
-            File imageFile = new File("C:\\Users\\fatim\\Documents\\Compilador Automatas\\CompiladorBonito\\PinkyLab.png");
+            File imageFile = new File("C:\\Users\\miner\\Documents\\#PROYECTOS\\PinkyLab\\PinkyLab.png");
             if (imageFile.exists()) {
                 BufferedImage originalImage = ImageIO.read(imageFile);
                 Image scaledImage = originalImage.getScaledInstance(350, 120, Image.SCALE_SMOOTH);
@@ -99,15 +109,23 @@ public class MainPanel extends javax.swing.JFrame {
         welcomeLabel.setForeground(new Color(220, 100, 180));
         centerPanel.add(welcomeLabel);
 
-        // Panel de botones inferior
+        // Panel de botones en grid layout (top right)
         JPanel buttonPanel = new JPanel();
         buttonPanel.setBackground(COLOR_FONDO_PRINCIPAL);
-        buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
+        buttonPanel.setLayout(new GridLayout(4, 2, 10, 10));
+        buttonPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         scanBtn = createPinkyButton("Analizar");
         scanBtn.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 scanBtnActionPerformed(evt);
+            }
+        });
+
+        runButton = createPinkyButton("Ejecutar");
+        runButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                runButtonActionPerformed(evt);
             }
         });
 
@@ -146,12 +164,40 @@ public class MainPanel extends javax.swing.JFrame {
             }
         });
 
+        JButton clearTerminalBtn = createPinkyButton("Limpiar Terminal");
+        clearTerminalBtn.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                terminalOutput.setText("");
+            }
+        });
+
         buttonPanel.add(scanBtn);
+        buttonPanel.add(runButton);
         buttonPanel.add(jButton5);
         buttonPanel.add(jButton6);
         buttonPanel.add(jButton4);
         buttonPanel.add(jButton1);
         buttonPanel.add(jButton7);
+        buttonPanel.add(clearTerminalBtn);
+
+        // Terminal output panel
+        terminalOutput = new JTextArea();
+        terminalOutput.setEditable(false);
+        terminalOutput.setFont(new Font("Consolas", Font.PLAIN, 13));
+        terminalOutput.setBackground(new Color(30, 30, 30));
+        terminalOutput.setForeground(new Color(0, 255, 0));
+        terminalOutput.setCaretColor(Color.WHITE);
+        terminalOutput.setText("Terminal output will appear here...\n");
+
+        JScrollPane terminalScrollPane = new JScrollPane(terminalOutput);
+        terminalScrollPane.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(COLOR_BOTON_BORDE, 2), 
+            "Terminal de Ejecución",
+            javax.swing.border.TitledBorder.LEFT,
+            javax.swing.border.TitledBorder.TOP,
+            new Font("Segoe UI", Font.BOLD, 12),
+            COLOR_BOTON_BORDE));
+        terminalScrollPane.setPreferredSize(new Dimension(0, 200));
 
         // Panel para el área de texto
         sourceStream = new javax.swing.JTextArea();
@@ -171,16 +217,28 @@ public class MainPanel extends javax.swing.JFrame {
         // Agregar el panel de números de línea al JScrollPane
         jScrollPane2.setRowHeaderView(lineNumberPanel);
 
+        // Create a panel for code editor and terminal
+        JSplitPane editorTerminalSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, 
+            jScrollPane2, terminalScrollPane);
+        editorTerminalSplit.setResizeWeight(0.7);
+        editorTerminalSplit.setDividerSize(5);
+
+        // Create top panel with welcome message and buttons
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setBackground(COLOR_FONDO_PRINCIPAL);
+
+        // Button panel wrapper to position it on the right
+        JPanel buttonPanelWrapper = new JPanel(new BorderLayout());
+        buttonPanelWrapper.setBackground(COLOR_FONDO_PRINCIPAL);
+        buttonPanelWrapper.add(buttonPanel, BorderLayout.EAST);
+
+        topPanel.add(centerPanel, BorderLayout.CENTER);
+        topPanel.add(buttonPanelWrapper, BorderLayout.EAST);
+
         // Agregar componentes al panel principal
         jPanel1.add(headerPanel, BorderLayout.NORTH);
-        jPanel1.add(jScrollPane2, BorderLayout.CENTER);
-        
-        JPanel southPanel = new JPanel(new BorderLayout());
-        southPanel.setBackground(COLOR_FONDO_PRINCIPAL);
-        southPanel.add(centerPanel, BorderLayout.CENTER);
-        southPanel.add(buttonPanel, BorderLayout.SOUTH);
-        
-        jPanel1.add(southPanel, BorderLayout.SOUTH);
+        jPanel1.add(editorTerminalSplit, BorderLayout.CENTER);
+        jPanel1.add(topPanel, BorderLayout.SOUTH);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(jPanel1, BorderLayout.CENTER);
@@ -327,6 +385,133 @@ public class MainPanel extends javax.swing.JFrame {
         this.objectCodeFrame.setVisible(true);
     }//GEN-LAST:event_jButton7ActionPerformed
 
+    private void runButtonActionPerformed(java.awt.event.ActionEvent evt) {
+        String code = sourceStream.getText();
+        if (code.isEmpty()) {
+            terminalOutput.setText("Error: No code to run!\n");
+            return;
+        }
+
+        terminalOutput.setText("Compiling and running...\n");
+        runButton.setEnabled(false);
+
+        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    // Create temporary directory
+                    File tempDir = new File(System.getProperty("java.io.tmpdir"), "pinkylab_temp");
+                    tempDir.mkdirs();
+
+                    // Extract class name from code
+                    String className = extractClassName(code);
+                    if (className == null) {
+                        publish("Error: No public class found in code!\n");
+                        return null;
+                    }
+
+                    // Write code to file
+                    File javaFile = new File(tempDir, className + ".java");
+                    try (FileWriter writer = new FileWriter(javaFile)) {
+                        writer.write(code);
+                    }
+
+                    publish("Compiling " + className + ".java...\n");
+
+                    // Compile
+                    ProcessBuilder compileBuilder = new ProcessBuilder(
+                        "javac", javaFile.getAbsolutePath()
+                    );
+                    compileBuilder.directory(tempDir);
+                    compileBuilder.redirectErrorStream(true);
+                    Process compileProcess = compileBuilder.start();
+
+                    StringBuilder compileOutput = new StringBuilder();
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(compileProcess.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            compileOutput.append(line).append("\n");
+                        }
+                    }
+
+                    int compileExitCode = compileProcess.waitFor();
+                    if (compileExitCode != 0) {
+                        publish("Compilation failed:\n" + compileOutput.toString());
+                        return null;
+                    }
+
+                    publish("Compilation successful!\n");
+                    publish("Running " + className + "...\n");
+                    publish("----------------------------------------\n");
+
+                    // Run
+                    ProcessBuilder runBuilder = new ProcessBuilder(
+                        "java", className
+                    );
+                    runBuilder.directory(tempDir);
+                    runBuilder.redirectErrorStream(true);
+                    Process runProcess = runBuilder.start();
+
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(runProcess.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            publish(line + "\n");
+                        }
+                    }
+
+                    int runExitCode = runProcess.waitFor();
+                    publish("----------------------------------------\n");
+                    publish("Program exited with code: " + runExitCode + "\n");
+
+                    // Cleanup
+                    javaFile.delete();
+                    new File(tempDir, className + ".class").delete();
+
+                } catch (Exception e) {
+                    publish("Error: " + e.getMessage() + "\n");
+                    e.printStackTrace();
+                }
+                return null;
+            }
+
+            @Override
+            protected void process(java.util.List<String> chunks) {
+                for (String text : chunks) {
+                    terminalOutput.append(text);
+                }
+                terminalOutput.setCaretPosition(terminalOutput.getDocument().getLength());
+            }
+
+            @Override
+            protected void done() {
+                runButton.setEnabled(true);
+            }
+        };
+
+        worker.execute();
+    }
+
+    private String extractClassName(String code) {
+        // Try to find public class first
+        java.util.regex.Pattern publicPattern = java.util.regex.Pattern.compile(
+            "public\\s+class\\s+(\\w+)");
+        java.util.regex.Matcher publicMatcher = publicPattern.matcher(code);
+        if (publicMatcher.find()) {
+            return publicMatcher.group(1);
+        }
+
+        // Try to find any class (with or without public modifier)
+        java.util.regex.Pattern anyClassPattern = java.util.regex.Pattern.compile(
+            "(?:public\\s+)?class\\s+(\\w+)");
+        java.util.regex.Matcher anyClassMatcher = anyClassPattern.matcher(code);
+        if (anyClassMatcher.find()) {
+            return anyClassMatcher.group(1);
+        }
+
+        return null;
+    }
 
     public static void main(String args[]) {
 
