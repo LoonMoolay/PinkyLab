@@ -9,6 +9,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 public class ObjectCodeGenerator extends javax.swing.JFrame {
 
     private String objectCode;
+    private int labelCounter = 0;
 
     public ObjectCodeGenerator(String intermediateCode) {
         initComponents();
@@ -85,8 +86,10 @@ public class ObjectCodeGenerator extends javax.swing.JFrame {
         // Track variable values for constant folding and optimization
         java.util.Map<String, String> varValues = new java.util.HashMap<>();
         java.util.Map<String, Integer> constantValues = new java.util.HashMap<>();
+        java.util.Stack<String> loopStartLabels = new java.util.Stack<>();
+        java.util.Stack<String> loopEndLabels = new java.util.Stack<>();
 
-        // Add assembly header (without comments)
+        // Add assembly header
         asmCode.append(".data\n\n");
         asmCode.append(".text\n");
         asmCode.append("    .globl main\n");
@@ -96,27 +99,201 @@ public class ObjectCodeGenerator extends javax.swing.JFrame {
 
         // Process each line of intermediate code
         String[] lines = intermediateCode.split("\n");
-        String currentRegister = null; // Track what's currently in AX
+        String currentRegister = null;
 
-        for (String line : lines) {
-            line = line.trim();
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
             if (line.isEmpty() || line.startsWith("{") || line.startsWith("}")) {
-                // Skip empty lines and braces
                 continue;
             }
 
-            // Convert intermediate code to assembly
-            if (line.contains("=")) {
+            // Handle while loops
+            if (line.startsWith("while")) {
+                String startLabel = "WHILE_START_" + (labelCounter++);
+                String endLabel = "WHILE_END_" + (labelCounter++);
+                loopStartLabels.push(startLabel);
+                loopEndLabels.push(endLabel);
+
+                asmCode.append(startLabel).append(":\n");
+
+                // Extract condition
+                String condition = line.substring(line.indexOf("(") + 1, line.lastIndexOf(")")).trim();
+                generateConditionCheck(asmCode, condition, endLabel, false);
+                continue;
+            }
+
+            // Handle for loops
+            if (line.startsWith("for")) {
+                String startLabel = "FOR_START_" + (labelCounter++);
+                String endLabel = "FOR_END_" + (labelCounter++);
+                loopStartLabels.push(startLabel);
+                loopEndLabels.push(endLabel);
+
+                asmCode.append(startLabel).append(":\n");
+                // For loops typically need condition checking - simplified version
+                continue;
+            }
+
+            // Handle do-while loops
+            if (line.startsWith("do")) {
+                String startLabel = "DO_START_" + (labelCounter++);
+                String endLabel = "DO_END_" + (labelCounter++);
+                loopStartLabels.push(startLabel);
+                loopEndLabels.push(endLabel);
+
+                asmCode.append(startLabel).append(":\n");
+                continue;
+            }
+
+            // Handle end of do-while with condition
+            if (line.contains("while") && !line.startsWith("while") && !loopStartLabels.isEmpty()) {
+                String startLabel = loopStartLabels.pop();
+                String endLabel = loopEndLabels.pop();
+
+                String condition = line.substring(line.indexOf("(") + 1, line.lastIndexOf(")")).trim();
+                generateConditionCheck(asmCode, condition, endLabel, false);
+                asmCode.append("    JMP ").append(startLabel).append("\n");
+                asmCode.append(endLabel).append(":\n");
+                continue;
+            }
+
+            // Handle end of while/for loops (implicit from closing brace in source)
+            if (line.equals("endloop") || (line.startsWith("}") && !loopStartLabels.isEmpty())) {
+                if (!loopStartLabels.isEmpty()) {
+                    String startLabel = loopStartLabels.pop();
+                    String endLabel = loopEndLabels.pop();
+                    asmCode.append("    JMP ").append(startLabel).append("\n");
+                    asmCode.append(endLabel).append(":\n");
+                }
+                continue;
+            }
+
+            // Handle if statements
+            if (line.startsWith("if")) {
+                String elseLabel = "ELSE_" + (labelCounter++);
+                String endLabel = "ENDIF_" + (labelCounter++);
+
+                String condition = line.substring(line.indexOf("(") + 1, line.lastIndexOf(")")).trim();
+                generateConditionCheck(asmCode, condition, elseLabel, true);
+                continue;
+            }
+
+            // Handle break statement
+            if (line.equals("break")) {
+                if (!loopEndLabels.isEmpty()) {
+                    asmCode.append("    JMP ").append(loopEndLabels.peek()).append("\n");
+                }
+                continue;
+            }
+
+            // Handle continue statement
+            if (line.equals("continue")) {
+                if (!loopStartLabels.isEmpty()) {
+                    asmCode.append("    JMP ").append(loopStartLabels.peek()).append("\n");
+                }
+                continue;
+            }
+
+            // Handle return statement
+            if (line.startsWith("return")) {
+                String returnValue = line.substring(6).trim();
+                if (!returnValue.isEmpty()) {
+                    asmCode.append("    MOV AX, ").append(returnValue).append("\n");
+                }
+                asmCode.append("    JMP END_MAIN\n");
+                continue;
+            }
+
+            // Handle increment operators (++)
+            if (line.contains("++")) {
+                String varName = line.replace("++", "").trim();
+                asmCode.append("    INC ").append(varName).append("\n");
+                continue;
+            }
+
+            // Handle decrement operators (--)
+            if (line.contains("--")) {
+                String varName = line.replace("--", "").trim();
+                asmCode.append("    DEC ").append(varName).append("\n");
+                continue;
+            }
+
+            // Handle compound assignments
+            if (line.contains("+=")) {
+                String[] parts = line.split("\\+=");
+                if (parts.length == 2) {
+                    String var = parts[0].trim();
+                    String value = parts[1].trim();
+                    asmCode.append("    MOV AX, ").append(var).append("\n");
+                    asmCode.append("    ADD AX, ").append(value).append("\n");
+                    asmCode.append("    MOV ").append(var).append(", AX\n");
+                }
+                continue;
+            }
+
+            if (line.contains("-=")) {
+                String[] parts = line.split("-=");
+                if (parts.length == 2) {
+                    String var = parts[0].trim();
+                    String value = parts[1].trim();
+                    asmCode.append("    MOV AX, ").append(var).append("\n");
+                    asmCode.append("    SUB AX, ").append(value).append("\n");
+                    asmCode.append("    MOV ").append(var).append(", AX\n");
+                }
+                continue;
+            }
+
+            if (line.contains("*=")) {
+                String[] parts = line.split("\\*=");
+                if (parts.length == 2) {
+                    String var = parts[0].trim();
+                    String value = parts[1].trim();
+                    asmCode.append("    MOV AX, ").append(var).append("\n");
+                    asmCode.append("    MOV BX, ").append(value).append("\n");
+                    asmCode.append("    IMUL BX\n");
+                    asmCode.append("    MOV ").append(var).append(", AX\n");
+                }
+                continue;
+            }
+
+            if (line.contains("/=")) {
+                String[] parts = line.split("/=");
+                if (parts.length == 2) {
+                    String var = parts[0].trim();
+                    String value = parts[1].trim();
+                    asmCode.append("    MOV AX, ").append(var).append("\n");
+                    asmCode.append("    XOR DX, DX\n");
+                    asmCode.append("    MOV BX, ").append(value).append("\n");
+                    asmCode.append("    IDIV BX\n");
+                    asmCode.append("    MOV ").append(var).append(", AX\n");
+                }
+                continue;
+            }
+
+            if (line.contains("%=")) {
+                String[] parts = line.split("%=");
+                if (parts.length == 2) {
+                    String var = parts[0].trim();
+                    String value = parts[1].trim();
+                    asmCode.append("    MOV AX, ").append(var).append("\n");
+                    asmCode.append("    XOR DX, DX\n");
+                    asmCode.append("    MOV BX, ").append(value).append("\n");
+                    asmCode.append("    IDIV BX\n");
+                    asmCode.append("    MOV ").append(var).append(", DX\n");
+                }
+                continue;
+            }
+
+            // Handle assignments
+            if (line.contains("=") && !line.contains("==")) {
                 String[] parts = line.split("=", 2);
                 if (parts.length == 2) {
                     String leftSide = parts[0].trim();
                     String rightSide = parts[1].trim();
 
-                    // Extract variable name (remove data type if present)
                     String[] leftParts = leftSide.split("\\s+");
                     String varName = leftParts[leftParts.length - 1];
 
-                    // Try constant folding first
                     Integer foldedValue = tryConstantFold(rightSide, constantValues);
                     if (foldedValue != null) {
                         asmCode.append("    MOV ").append(varName).append(", ").append(foldedValue).append("\n");
@@ -125,20 +302,17 @@ public class ObjectCodeGenerator extends javax.swing.JFrame {
                         continue;
                     }
 
-                    // Check if it's an arithmetic operation
-                    if (rightSide.contains("+")) {
+                    if (rightSide.contains("+") && !rightSide.contains("++")) {
                         generateOptimizedArithmetic(asmCode, line, varName, rightSide, "+", "ADD", currentRegister, varValues);
-                    } else if (rightSide.contains("-") && !rightSide.matches("^-?\\d+$")) {
+                    } else if (rightSide.contains("-") && !rightSide.matches("^-?\\d+$") && !rightSide.contains("--")) {
                         generateOptimizedArithmetic(asmCode, line, varName, rightSide, "-", "SUB", currentRegister, varValues);
-                    } else if (rightSide.contains("*")) {
+                    } else if (rightSide.contains("*") && !rightSide.contains("*=")) {
                         generateOptimizedMultiply(asmCode, line, varName, rightSide, currentRegister);
-                    } else if (rightSide.contains("/") && !rightSide.contains("//")) {
+                    } else if (rightSide.contains("/") && !rightSide.contains("//") && !rightSide.contains("/=")) {
                         generateOptimizedDivide(asmCode, line, varName, rightSide, "DIV", currentRegister);
-                    } else if (rightSide.contains("%")) {
+                    } else if (rightSide.contains("%") && !rightSide.contains("%=")) {
                         generateOptimizedDivide(asmCode, line, varName, rightSide, "MOD", currentRegister);
                     } else {
-                        // Simple assignment - optimize if possible
-                        // If assigning to the variable that's already in AX, skip (redundant)
                         if (!(rightSide.equals(currentRegister) && varName.equals(currentRegister))) {
                             asmCode.append("    MOV ").append(varName).append(", ").append(rightSide).append("\n");
                             varValues.put(varName, rightSide);
@@ -149,8 +323,9 @@ public class ObjectCodeGenerator extends javax.swing.JFrame {
             }
         }
 
-        // Add assembly footer (without comments)
-        asmCode.append("\n    MOV SP, BP\n");
+        // Add assembly footer
+        asmCode.append("\nEND_MAIN:\n");
+        asmCode.append("    MOV SP, BP\n");
         asmCode.append("    POP BP\n");
         asmCode.append("    MOV AX, 4C00h\n");
         asmCode.append("    INT 21h\n");
@@ -312,6 +487,113 @@ public class ObjectCodeGenerator extends javax.swing.JFrame {
 
     private boolean isPowerOfTwo(int n) {
         return n > 0 && (n & (n - 1)) == 0;
+    }
+
+    private void generateConditionCheck(StringBuilder asmCode, String condition, String jumpLabel, boolean jumpIfFalse) {
+        // Handle logical operators
+        if (condition.contains("&&")) {
+            // For AND: both conditions must be true
+            String[] conditions = condition.split("&&");
+            String tempLabel = "TEMP_" + (labelCounter++);
+
+            for (int i = 0; i < conditions.length; i++) {
+                String cond = conditions[i].trim();
+                if (i < conditions.length - 1) {
+                    generateSingleCondition(asmCode, cond, jumpLabel, true);
+                } else {
+                    generateSingleCondition(asmCode, cond, jumpLabel, jumpIfFalse);
+                }
+            }
+            return;
+        }
+
+        if (condition.contains("||")) {
+            // For OR: at least one condition must be true
+            String[] conditions = condition.split("\\|\\|");
+            String successLabel = "SUCCESS_" + (labelCounter++);
+
+            for (int i = 0; i < conditions.length; i++) {
+                String cond = conditions[i].trim();
+                if (i < conditions.length - 1) {
+                    generateSingleCondition(asmCode, cond, successLabel, false);
+                } else {
+                    generateSingleCondition(asmCode, cond, jumpLabel, jumpIfFalse);
+                }
+            }
+            if (!jumpIfFalse) {
+                asmCode.append(successLabel).append(":\n");
+            }
+            return;
+        }
+
+        // Handle NOT operator
+        if (condition.startsWith("!")) {
+            String innerCondition = condition.substring(1).trim();
+            generateSingleCondition(asmCode, innerCondition, jumpLabel, !jumpIfFalse);
+            return;
+        }
+
+        generateSingleCondition(asmCode, condition, jumpLabel, jumpIfFalse);
+    }
+
+    private void generateSingleCondition(StringBuilder asmCode, String condition, String jumpLabel, boolean jumpIfFalse) {
+        // Parse comparison operators
+        String operator = "";
+        String[] operands = null;
+
+        if (condition.contains("==")) {
+            operator = "==";
+            operands = condition.split("==");
+        } else if (condition.contains("!=")) {
+            operator = "!=";
+            operands = condition.split("!=");
+        } else if (condition.contains("<=")) {
+            operator = "<=";
+            operands = condition.split("<=");
+        } else if (condition.contains(">=")) {
+            operator = ">=";
+            operands = condition.split(">=");
+        } else if (condition.contains("<")) {
+            operator = "<";
+            operands = condition.split("<");
+        } else if (condition.contains(">")) {
+            operator = ">";
+            operands = condition.split(">");
+        }
+
+        if (operands != null && operands.length == 2) {
+            String op1 = operands[0].trim();
+            String op2 = operands[1].trim();
+
+            asmCode.append("    MOV AX, ").append(op1).append("\n");
+            asmCode.append("    CMP AX, ").append(op2).append("\n");
+
+            // Generate appropriate jump based on operator
+            String jumpInstruction = "";
+            if (jumpIfFalse) {
+                // Jump when condition is FALSE
+                switch (operator) {
+                    case "==": jumpInstruction = "JNE"; break;
+                    case "!=": jumpInstruction = "JE"; break;
+                    case "<": jumpInstruction = "JGE"; break;
+                    case ">": jumpInstruction = "JLE"; break;
+                    case "<=": jumpInstruction = "JG"; break;
+                    case ">=": jumpInstruction = "JL"; break;
+                }
+            } else {
+                // Jump when condition is TRUE
+                switch (operator) {
+                    case "==": jumpInstruction = "JE"; break;
+                    case "!=": jumpInstruction = "JNE"; break;
+                    case "<": jumpInstruction = "JL"; break;
+                    case ">": jumpInstruction = "JG"; break;
+                    case "<=": jumpInstruction = "JLE"; break;
+                    case ">=": jumpInstruction = "JGE"; break;
+                }
+            }
+
+            asmCode.append("    ").append(jumpInstruction).append(" ").append(jumpLabel).append("\n");
+        }
     }
 
     private void saveObjectCodeToFile() {

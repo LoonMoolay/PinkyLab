@@ -210,28 +210,78 @@ public class LexemeGenerator {
         List<String> keywords = new ArrayList<String>(); 
         if (lines.contains("int") || lines.contains("float") 
         || lines.contains("if") || lines.contains("else") 
-        || lines.contains("public") || lines.contains("class")) {         
+        || lines.contains("public") || lines.contains("class")
+        || lines.contains("while") || lines.contains("for") || lines.contains("do")
+        || lines.contains("return") || lines.contains("break") || lines.contains("continue")
+        || lines.contains("private") || lines.contains("protected") 
+        || lines.contains("boolean") || lines.contains("char") 
+        || lines.contains("long") || lines.contains("byte") || lines.contains("short")) {         
             if (lines.contains("public"))
                 addKeyword(lines, keywords, "public");
+            if (lines.contains("private"))
+                addKeyword(lines, keywords, "private");
+            if (lines.contains("protected"))
+                addKeyword(lines, keywords, "protected");
             if (lines.contains("class"))
                 addKeyword(lines, keywords, "class");
             if (lines.contains("int")) 
                 addKeyword(lines, keywords, "int");  
             if (lines.contains("float")) 
-                addKeyword(lines, keywords, "float");  
+                addKeyword(lines, keywords, "float");
+            if (lines.contains("double"))
+                addKeyword(lines, keywords, "double");
+            if (lines.contains("boolean"))
+                addKeyword(lines, keywords, "boolean");
+            if (lines.contains("char"))
+                addKeyword(lines, keywords, "char");
+            if (lines.contains("long"))
+                addKeyword(lines, keywords, "long");
+            if (lines.contains("byte"))
+                addKeyword(lines, keywords, "byte");
+            if (lines.contains("short"))
+                addKeyword(lines, keywords, "short");
             if (lines.contains("if")) 
                 addKeyword(lines, keywords, "if");
             if (lines.contains("else"))     
-                addKeyword(lines, keywords, "else");           
+                addKeyword(lines, keywords, "else");
+            if (lines.contains("while"))
+                addKeyword(lines, keywords, "while");
+            if (lines.contains("for"))
+                addKeyword(lines, keywords, "for");
+            if (lines.contains("do"))
+                addKeyword(lines, keywords, "do");
+            if (lines.contains("return"))
+                addKeyword(lines, keywords, "return");
+            if (lines.contains("break"))
+                addKeyword(lines, keywords, "break");
+            if (lines.contains("continue"))
+                addKeyword(lines, keywords, "continue");
         } 
         return keywords;
     }
 
     private static List<String> getOperators(ArrayList<String> lines) {
     	List<String> operators = new ArrayList<String>();        
-        if (lines.contains("=") || lines.contains("-") || lines.contains("+") || lines.contains("*")) {         
+        if (lines.contains("=") || lines.contains("-") || lines.contains("+") || lines.contains("*")
+        || lines.contains("++") || lines.contains("--") 
+        || lines.contains("+=") || lines.contains("-=") 
+        || lines.contains("*=") || lines.contains("/=") || lines.contains("%=")) {         
             if (lines.contains("=")) 
-                addOp(lines, operators, "=");              
+                addOp(lines, operators, "=");
+            if (lines.contains("++"))
+                addOp(lines, operators, "++");
+            if (lines.contains("--"))
+                addOp(lines, operators, "--");
+            if (lines.contains("+="))
+                addOp(lines, operators, "+=");
+            if (lines.contains("-="))
+                addOp(lines, operators, "-=");
+            if (lines.contains("*="))
+                addOp(lines, operators, "*=");
+            if (lines.contains("/="))
+                addOp(lines, operators, "/=");
+            if (lines.contains("%="))
+                addOp(lines, operators, "%=");
             if (lines.contains("-")) 
                 addOp(lines, operators, "-");          
             if (lines.contains("+")) 
@@ -244,7 +294,8 @@ public class LexemeGenerator {
 
     private static List<String> getLogiOperators(ArrayList<String> lines) {
         List<String> logical = new ArrayList<String>(); 
-        if (lines.contains("<") || lines.contains(">") || lines.contains("<=") || lines.contains(">=")) {         
+        if (lines.contains("<") || lines.contains(">") || lines.contains("<=") || lines.contains(">=")
+        || lines.contains("&&") || lines.contains("||") || lines.contains("!")) {         
             if (lines.contains("<")) 
                 addLogiOp(lines, logical, "<");
             if (lines.contains(">")) 
@@ -252,7 +303,13 @@ public class LexemeGenerator {
             if (lines.contains("<=")) 
                 addLogiOp(lines, logical, "<=");
             if (lines.contains(">=")) 
-                addLogiOp(lines, logical, ">=");        
+                addLogiOp(lines, logical, ">=");
+            if (lines.contains("&&"))
+                addLogiOp(lines, logical, "&&");
+            if (lines.contains("||"))
+                addLogiOp(lines, logical, "||");
+            if (lines.contains("!"))
+                addLogiOp(lines, logical, "!");
         } 
         return logical;
     }
@@ -260,13 +317,26 @@ public class LexemeGenerator {
     private String isKeyword(String token) {
         if(token.equals("int")) return "int";
         if(token.equals("float")) return "float";
+        if(token.equals("double")) return "double";
+        if(token.equals("boolean")) return "boolean";
+        if(token.equals("char")) return "char";
+        if(token.equals("long")) return "long";
+        if(token.equals("byte")) return "byte";
+        if(token.equals("short")) return "short";
+        if(token.equals("String")) return "String";
         if(token.equals("if")) return "if";
         if(token.equals("else")) return "else";
+        if(token.equals("while")) return "while";
+        if(token.equals("for")) return "for";
+        if(token.equals("do")) return "do";
+        if(token.equals("return")) return "return";
+        if(token.equals("break")) return "break";
+        if(token.equals("continue")) return "continue";
         if(token.equals("public")) return "public";
+        if(token.equals("private")) return "private";
+        if(token.equals("protected")) return "protected";
         if(token.equals("class")) return "class";
         if(token.equals("void")) return "void";
-        if(token.equals("double")) return "double";
-        if(token.equals("String")) return "String";
         if(token.equals("static")) return "static";
         return null;
     }
@@ -278,6 +348,13 @@ public class LexemeGenerator {
         else if(token.equals("/")) return "/";
         else if(token.equals("%")) return "%";
         else if(token.equals("=")) return "=";
+        else if(token.equals("++")) return "++";
+        else if(token.equals("--")) return "--";
+        else if(token.equals("+=")) return "+=";
+        else if(token.equals("-=")) return "-=";
+        else if(token.equals("*=")) return "*=";
+        else if(token.equals("/=")) return "/=";
+        else if(token.equals("%=")) return "%=";
         else return null;
     }
     
@@ -288,6 +365,9 @@ public class LexemeGenerator {
         else if(token.equals(">=")) return ">=";
         else if(token.equals("==")) return "==";
         else if(token.equals("!=")) return "!=";
+        else if(token.equals("&&")) return "&&";
+        else if(token.equals("||")) return "||";
+        else if(token.equals("!")) return "!";
         else return null;
     }
     
@@ -297,7 +377,8 @@ public class LexemeGenerator {
     
     private boolean isIdentifier(String token) {
         return !(token.equals("linebreak")) && 
-                ((token.matches("\\w+") || token.matches("\\w+\\(\\)")) && !token.matches("\\d+") && !token.matches("int|float|if|else|public|class"));
+                ((token.matches("\\w+") || token.matches("\\w+\\(\\)")) && !token.matches("\\d+") 
+                && !token.matches("int|float|double|boolean|char|long|byte|short|String|if|else|while|for|do|return|break|continue|public|private|protected|class|void|static"));
     }
     
     private boolean isSpecial(String token) {
